@@ -1,4 +1,16 @@
 #include "../inc/server.h"
+#include <string.h>
+
+#define BUF_SIZE 10000
+
+
+// Structure contenant la mémoire partagée
+typedef struct sh_mem_t
+{
+        int shm;
+        char buffer[BUF_SIZE]; // contenu de la memoire
+} sh_mem;
+sh_mem shmem;
 
 key_t keyGenerator(int val){
         printf(YEL "      * [keyGenerator] Generating a key. * %s\n", " ");
@@ -42,6 +54,7 @@ int semUnlock(int idSem){
 
 
 
+
 int main(int argc, char const *argv[]) {
 
         printf("Main server \n" );
@@ -58,10 +71,10 @@ int main(int argc, char const *argv[]) {
                 perror("ftok");
                 exit(1);
         }
-        // // Créer la mémoire partagée
-        // if ((shmem.shm = shmget(key, BUF_SIZE, IPC_CREAT | 0600)) == -1) {
-        //         error("shmget");
-        // }
+        // Créer la mémoire partagée
+        if ((shmem.shm = shmget(key,BUF_SIZE, IPC_CREAT | 0600)) == -1) {
+                perror("shmget");
+        }
 
         memset(&srv_addr, 0, sizeof(srv_addr));
         srv_addr.sin_family = AF_UNSPEC;          // Nommage de la famille de socket

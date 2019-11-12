@@ -36,7 +36,6 @@
 /* end of color define */
 
 
-int tcpConnect();
 int tcpSend();
 int tcpRecv();
 
