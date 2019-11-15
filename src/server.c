@@ -18,9 +18,9 @@ key_t keyGenerator(int val){
         return key;
 }
 
-int semConnect(key_t key){
+int semConnect(key_t key, int nbsem){
         printf(YEL "      * [semConnect] Connection to the semaphore. * %s\n", " ");
-        return semget(key, 1, IPC_CREAT|0666);
+        return semget(key, nbsem, IPC_CREAT|0666);
 
 }
 
@@ -75,6 +75,9 @@ int main(int argc, char const *argv[]) {
         if ((shmem.shm = shmget(key,BUF_SIZE, IPC_CREAT | 0600)) == -1) {
                 perror("shmget");
         }
+
+        // creation des semarphores
+        semConnect(keyGenerator(1),1);
 
         memset(&srv_addr, 0, sizeof(srv_addr));
         srv_addr.sin_family = AF_UNSPEC;          // Nommage de la famille de socket

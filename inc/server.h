@@ -40,7 +40,7 @@ int tcpSend();
 int tcpRecv();
 
 key_t keyGenerator(int);
-int semConnect(key_t);
+int semConnect(key_t , int);
 int semGetVal(int);
 int semSetIntVal(int, int);
 int semLock(int);
