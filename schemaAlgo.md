@@ -1,7 +1,6 @@
 # Serveur :
 
-InitShm();
-
+-   InitShm();
 -   InitSemaphores();
 -   InitServeur();
 -   Ecoute(socket);
