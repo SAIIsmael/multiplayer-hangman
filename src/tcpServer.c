@@ -194,6 +194,7 @@ void sendNextSTep(int connfd, char* ip, int port, struct gamestate* gs){
 
 int main(int argc, char* argv[])
 {
+        int father = getpid();
         if ( argc < 3 ) {
                 printf(MAG "[Error] Unrecognize command. \n");
                 printf(CYN "[Usage] ./tcpServer [portServer][nbClients] \n");
@@ -229,6 +230,15 @@ int main(int argc, char* argv[])
                 exit(0);
         }
         // Now server is ready to listen and verification
+        key_t key = ftok("shmfile",65);
+        int shmid = shmget(key,sizeof(struct gamestate),0666|IPC_CREAT);
+        if(shmid < 0) {
+                printf("Error creating shared memory");
+                exit(1);
+        }
+        struct gamestate *ptrToGame;
+        ptrToGame = shmat(shmid, NULL, 0);
+        initGame(ptrToGame);
 
 
         printf(CYN "\n==========================================\n");
@@ -242,15 +252,6 @@ int main(int argc, char* argv[])
 
                 struct sockaddr_in cli;
                 int len = sizeof(cli);
-                key_t key = ftok("shmfile",65);
-                int shmid = shmget(key,sizeof(struct gamestate),0666|IPC_CREAT);
-                if(shmid < 0) {
-                        printf("Error creating shared memory");
-                        exit(1);
-                }
-                struct gamestate *ptrToGame;
-                ptrToGame = shmat(shmid, NULL, 0);
-                initGame(ptrToGame);
 
                 // Accept the data packet from client and verification
                 int connfd = accept(sockfd, (SA*)&cli, (socklen_t* ) &len);
@@ -258,9 +259,9 @@ int main(int argc, char* argv[])
                         printf("server acccept failed...\n");
                         exit(0);
                 }
-                int fils;
+                int son;
 
-                if ( (fils = fork()) == 0) {
+                if ( (son = fork()) == 0) {
                         key_t key = ftok("shmfile",65);
                         int shmid = shmget(key,sizeof(struct gamestate),0666|IPC_CREAT);
                         if(shmid < 0) {
@@ -282,7 +283,7 @@ int main(int argc, char* argv[])
 
                         sendNextSTep(connfd, inet_ntoa(cli.sin_addr),cli.sin_port, ptrToGame);
                 }
-                //    wait(&fils);
+                if ( son == father ) {wait(&son);}
 
 
         }
