@@ -155,12 +155,47 @@ void gamePrint(struct gamestate* gs){
         }
 }
 
+void recvNextStep(int sockfd, char* buff, struct gamestate *gs, char* ip, int port ){
+        while(1) {
+                system("clear");
+                gamePrint(gs);
+                printf("\n\n\n");
+                int nLetter;
+                char letter;
+                printf("Which letter you want to edit ? >");
+                scanf("%d", &nLetter);
+
+                char intToSend[4];
+                sprintf(intToSend, "%d", nLetter);
+                printf("%s\n", intToSend);
+                sendWithSize(sockfd, intToSend, strlen(intToSend));
+                bzero(intToSend, 4);
+
+
+                printf("\n Letter > ");
+                scanf("\n%c", &letter);
+
+
+                sendWithSize(sockfd, &letter, 1);
+                bzero(&letter, 1);
+
+
+                recvStruct(sockfd, gs,buff,ip, port);
+                if ( gs->win == -1 ) { break;}
+                if ( gs->win == 1 ) { break;}
+                system("clear");
+                gamePrint(gs);
+                printf("\n\n\n");
+                printf("Play > ");
+        }
+}
+
 int main(int argc, char* argv[])
 {
-        int sockfd, connfd;
+        int sockfd;
         char buff[BUFF_SIZE];
         bzero(buff, BUFF_SIZE);
-        struct sockaddr_in servaddr, cli;
+        struct sockaddr_in servaddr;
         if ( argc < 3 ) {
                 printf(MAG "[Error] Unrecognize command. \n");
                 printf(CYN "[Usage] ./tcpClient [ipServer][portServer] \n");
@@ -205,25 +240,8 @@ int main(int argc, char* argv[])
 
         recvStruct(sockfd, &gs,buff,argv[1], atoi(argv[2]));
 
-        while(1) {
-                system("clear");
-                gamePrint(&gs);
-                printf("\n\n\n");
-                printf("Play > ");
-                char playToDecode;
-                scanf("\n%c", &playToDecode);
-                printf("%c\n", playToDecode);
-                sendWithSize(sockfd, &playToDecode, 1);
-                bzero(&playToDecode, 1);
+        recvNextStep(sockfd,buff, &gs, argv[1], atoi(argv[2]));
 
-                recvStruct(sockfd, &gs,buff,argv[1], atoi(argv[2]));
-                if ( gs.win == -1 ) { break;}
-                if ( gs.win == 1 ) { break;}
-                system("clear");
-                gamePrint(&gs);
-                printf("\n\n\n");
-                printf("Play > ");
-        }
         if ( gs.win == -1 || gs.win == 1) {   system("clear");
                                               gamePrint(&gs);}
         printf(MAG "[Quit] client closed. Bye bye.\n");

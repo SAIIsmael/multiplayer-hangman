@@ -147,26 +147,35 @@ void sendStruct(int connfd, struct gamestate *gs){
         sendWithSize(connfd, gs->word_to_find, strlen(gs->word_to_find));
 
 }
-int containsAtPos( char c, char* s, struct gamestate *gs){
-        int pos = -1;
-        for (size_t i = 0; i < strlen(s); i++) {
-                if ( ( c == s[i] || toupper(c) == s[i] ) && gs->alreadyFound[i] == 0 ) { pos = i;}
+
+void executePlay( int nLetter, char letter, struct gamestate* gs){
+        printf("You chose to put letter %c at place %d \n", letter, nLetter);
+
+        printf("%s \n",gs->word_to_find );
+        printf("%c -> %c \n", gs->word_to_find[nLetter-1], nLetter);
+        if(gs->word_to_find[nLetter-1] == letter) {
+                gs->word_found[nLetter-1] = letter;
         }
-        return pos;
+        else{ gs->error++;}
 }
 
-void executePlay(char *toDecode, struct gamestate* gs){
-        char newLetter = *toDecode;
-        printf("You chose to put letter %c\n", newLetter);
-        if ( containsAtPos(newLetter, gs->word_to_find, gs) != -1 ) {
-                gs->word_found[containsAtPos(newLetter, gs->word_to_find, gs)] = newLetter;
-                gs->alreadyFound[containsAtPos(newLetter, gs->word_to_find, gs)] = 1;
-        }
-        if (containsAtPos(newLetter, gs->word_to_find, gs) == -1 ) { gs->error++;}
-        if ( strcmp(gs->word_found, gs->word_to_find) == 0 || strcasecmp(gs->word_found,gs->word_to_find) == 0) { gs->win = 1;}
-        if (gs->error == 8) { gs->win = -1;}
-}
+void sendNextSTep(int connfd, char* ip, int port, struct gamestate* gs){
+        while(1) {
+                char intRec;
+                int letterNum;
+                recvWithSize(connfd, &intRec, ip, port);
+                letterNum = intRec - '0';
+                printf("letter from user : %d\n", letterNum);
 
+                char playRec;
+                recvWithSize(connfd, &playRec, ip, port);
+                printf("play from user : %c\n", playRec);
+                char letter = playRec;
+
+                executePlay(letterNum,letter, gs);
+                sendStruct(connfd, gs);
+        }
+}
 
 int main(int argc, char* argv[])
 {
@@ -211,40 +220,38 @@ int main(int argc, char* argv[])
         printf(CYN "\n==========================================\n");
         printf(CYN "|            SERVER %s:%d         |\n", ipServ,htons(servaddr.sin_port));
         printf(CYN "==========================================\n");
-
-        if ((listen(sockfd, nbClients)) != 0) {
-                printf("Listen failed...\n");
-                exit(0);
-        }
-
-        struct sockaddr_in cli;
-        int len = sizeof(cli);
-
-        // Accept the data packet from client and verification
-        int connfd = accept(sockfd, (SA*)&cli, (socklen_t* ) &len);
-        if (connfd < 0) {
-                printf("server acccept failed...\n");
-                exit(0);
-        }
-        else
-                printf(GRN "[Connection] client %s:%d connected.\n", inet_ntoa(cli.sin_addr),htons(cli.sin_port));
-        char SelectFun[4];
-        recvWithSize(connfd, SelectFun, inet_ntoa(cli.sin_addr),cli.sin_port);
-        bzero(SelectFun, 4);
-
-
-        struct gamestate gs;
-        initGame(&gs);
-        sendStruct(connfd, &gs);
-
         while(1) {
-                char playRec;
-                recvWithSize(connfd, &playRec, inet_ntoa(cli.sin_addr), cli.sin_port);
-                printf("play from user : %c\n", playRec);
-                char letter = playRec;
+                if ((listen(sockfd, nbClients)) != 0) {
+                        printf("Listen failed...\n");
+                        exit(0);
+                }
 
-                executePlay(&letter, &gs);
-                sendStruct(connfd, &gs);
+                struct sockaddr_in cli;
+                int len = sizeof(cli);
+
+                // Accept the data packet from client and verification
+                int connfd = accept(sockfd, (SA*)&cli, (socklen_t* ) &len);
+                if (connfd < 0) {
+                        printf("server acccept failed...\n");
+                        exit(0);
+                }
+                int fils;
+
+                if ( (fils = fork()) == 0) {
+                        close(sockfd);
+                        printf(GRN "[Connection] client %s:%d connected.\n", inet_ntoa(cli.sin_addr),htons(cli.sin_port));
+                        char SelectFun[4];
+                        recvWithSize(connfd, SelectFun, inet_ntoa(cli.sin_addr),cli.sin_port);
+                        bzero(SelectFun, 4);
+
+
+                        struct gamestate gs;
+                        initGame(&gs);
+                        sendStruct(connfd, &gs);
+
+                        sendNextSTep(connfd, inet_ntoa(cli.sin_addr),cli.sin_port, &gs);
+                }
         }
+
         return 0;
 }
