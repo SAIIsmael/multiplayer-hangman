@@ -7,6 +7,7 @@
 char* words[16]= {"ANGLE","ARMOIRE","BANC","BUREAU","CABINET","CARREAU","CHAISE","CLASSE","CLEF","COIN","COULOIR","DOSSIER","EAU","ECOLE","ENTRER","ESCALIER"};
 
 
+
 struct gamestate {
         int error;
         int win;
@@ -57,6 +58,27 @@ void initGame(struct gamestate* gs){
         gs->win = 0;
 }
 
+int containsAtPos( char c, char* s, struct gamestate *gs){
+        int pos = -1;
+        for (size_t i = 0; i < strlen(s); i++) {
+                if ( ( c == s[i] || toupper(c) == s[i] ) && gs->alreadyFound[i] == 0 ) { pos = i;}
+        }
+        return pos;
+}
+
+void executePlay(char *toDecode, struct gamestate* gs){
+        char newLetter = *toDecode;
+        printf("You chose to put letter %c\n", newLetter);
+        if ( containsAtPos(newLetter, gs->word_to_find, gs) != -1 ) {
+                gs->word_found[containsAtPos(newLetter, gs->word_to_find, gs)] = newLetter;
+                gs->alreadyFound[containsAtPos(newLetter, gs->word_to_find, gs)] = 1;
+        }
+        if (containsAtPos(newLetter, gs->word_to_find, gs) == -1 ) { gs->error++;}
+        if ( strcmp(gs->word_found, gs->word_to_find) == 0 || strcasecmp(gs->word_found,gs->word_to_find) == 0) { gs->win = 1;}
+        if (gs->error == 8) { gs->win = -1;}
+}
+
+
 void printWF(struct gamestate* gs){
         for (size_t i = 0; i < strlen(gs->word_to_find); i++) {
                 printf("%c", gs->word_found[i]);
@@ -86,25 +108,6 @@ void gamePrint(struct gamestate* gs){
         }
 }
 
-int containsAtPos( char c, char* s, struct gamestate *gs){
-        int pos = -1;
-        for (size_t i = 0; i < strlen(s); i++) {
-                if ( ( c == s[i] || toupper(c) == s[i] ) && gs->alreadyFound[i] == 0 ) { pos = i;}
-        }
-        return pos;
-}
-
-void executePlay(char *toDecode, struct gamestate* gs){
-        char newLetter = *toDecode;
-        printf("You chose to put letter %c\n", newLetter);
-        if ( containsAtPos(newLetter, gs->word_to_find, gs) != -1 ) {
-                gs->word_found[containsAtPos(newLetter, gs->word_to_find, gs)] = newLetter;
-                gs->alreadyFound[containsAtPos(newLetter, gs->word_to_find, gs)] = 1;
-        }
-        if (containsAtPos(newLetter, gs->word_to_find, gs) == -1 ) { gs->error++;}
-        if ( strcmp(gs->word_found, gs->word_to_find) == 0 || strcasecmp(gs->word_found,gs->word_to_find) == 0) { gs->win = 1;}
-        if (gs->error == 8) { gs->win = -1;}
-}
 
 int main(int argc, char const *argv[]) {
         struct gamestate gs;
