@@ -6,8 +6,6 @@
 
 char* words[16]= {"ANGLE","ARMOIRE","BANC","BUREAU","CABINET","CARREAU","CHAISE","CLASSE","CLEF","COIN","COULOIR","DOSSIER","EAU","ECOLE","ENTRER","ESCALIER"};
 
-
-
 struct gamestate {
         int error;
         int win;

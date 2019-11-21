@@ -57,6 +57,7 @@ char* words[16]= {"COIN",
                   "FOUS",
                   "FORT"};
 
+
 struct gamestate {
         int error;
         int win;
@@ -65,6 +66,15 @@ struct gamestate {
         int size;
         char word_found[4];
 
+};
+typedef struct dataGame dataG;
+
+struct dataGame {
+  int dSclient;
+  struct gamestate *gs;
+  int port;
+  char* Rdata;
+  char* ip;
 };
 
 char* getRandomWord(){
@@ -192,6 +202,33 @@ void sendNextSTep(int connfd, char* ip, int port, struct gamestate* gs){
         }
 }
 
+// THREAD
+void * reponseClient(void * par){
+
+  dataG * d;
+  d = (dataG *) par;
+  int dSclient = d->dSclient;
+  struct gamestate *gs = d->gs;
+  int port = d->port;
+  char* Rdata = d->Rdata;
+  char* ip = d->ip;
+
+  int connecte = 1;
+
+  while (connecte) {
+    int r = recvWithSize( dSclient, Rdata, ip, port);
+    if(r == -1) pthread_exit((void *)-1);
+    if(r == -2) connecte = 0;
+
+    //verification
+
+  ///  sendStruct(dSclient,gs);
+
+  }
+pthread_exit(NULL);
+
+}
+
 int main(int argc, char* argv[])
 {
         int father = getpid();
@@ -240,7 +277,6 @@ int main(int argc, char* argv[])
         ptrToGame = shmat(shmid, NULL, 0);
         initGame(ptrToGame);
 
-
         printf(CYN "\n==========================================\n");
         printf(CYN "|            SERVER %s:%d         |\n", ipServ,htons(servaddr.sin_port));
         printf(CYN "==========================================\n");
@@ -252,6 +288,7 @@ int main(int argc, char* argv[])
 
                 struct sockaddr_in cli;
                 int len = sizeof(cli);
+              //  int connfd;
 
                 // Accept the data packet from client and verification
                 int connfd = accept(sockfd, (SA*)&cli, (socklen_t* ) &len);
@@ -268,18 +305,26 @@ int main(int argc, char* argv[])
                                 printf("Error creating shared memory");
                                 exit(1);
                         }
-                        struct gamestate *ptrToGame;
+                        //struct gamestate *ptrToGame;
+
                         ptrToGame = shmat(shmid, NULL, 0);
                         printf("fils : %s\n", ptrToGame->word_to_find);
                         close(sockfd);
                         printf(GRN "[Connection] client %s:%d connected.\n", inet_ntoa(cli.sin_addr),htons(cli.sin_port));
-                        char SelectFun[4];
+                        char *SelectFun[4];
+
+                        dataG D = { connfd ,ptrToGame,SelectFun , inet_ntoa(cli.sin_addr),cli.sin_port};
+                        dataG * d = &D;
+                        pthread_t idTh;
+
+                        // Création du thread qui va attendre une modification du client
+                        // if(pthread_create(&idTh, NULL, reponseClient, (void *)d) != 0) {
+                        //                 printf("Erreur lors de la création du thread reponseClient\n");
+                        //                 return -1;
+                        // }
                         recvWithSize(connfd, SelectFun, inet_ntoa(cli.sin_addr),cli.sin_port);
-                        bzero(SelectFun, 4);
-
-
-
-                        sendStruct(connfd, ptrToGame);
+                         bzero(SelectFun, 4);
+                         sendStruct(connfd, ptrToGame);
 
                         sendNextSTep(connfd, inet_ntoa(cli.sin_addr),cli.sin_port, ptrToGame);
                 }

@@ -236,8 +236,6 @@ int main(int argc, char* argv[])
         sendWithSize(sockfd, toEdit, strlen(toEdit));
         bzero(toEdit, 4);
 
-
-
         recvStruct(sockfd, &gs,buff,argv[1], atoi(argv[2]));
 
         recvNextStep(sockfd,buff, &gs, argv[1], atoi(argv[2]));
