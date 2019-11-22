@@ -40,22 +40,7 @@
 #define BUFF_SIZE 256
 #define SA struct sockaddr
 
-char* words[16]= {"COIN",
-                  "DONS",
-                  "BANC",
-                  "FEUX",
-                  "HERO",
-                  "GARE",
-                  "DUEL",
-                  "AVEC",
-                  "CLEF",
-                  "COIN",
-                  "DOJO",
-                  "DORS",
-                  "EAUX",
-                  "FEVE",
-                  "FOUS",
-                  "FORT"};
+
 
 
 struct gamestate {
@@ -65,19 +50,37 @@ struct gamestate {
         int alreadyFound[4];
         int size;
         char word_found[4];
+        int clients[4];
+        int currentClient;
 
 };
 typedef struct dataGame dataG;
 
 struct dataGame {
-  int dSclient;
-  struct gamestate *gs;
-  int port;
-  char* Rdata;
-  char* ip;
+        int dSclient;
+        struct gamestate *gs;
+        int port;
+        char* Rdata;
+        char* ip;
 };
 
 char* getRandomWord(){
+        char* words[16]= {"COIN",
+                          "DONS",
+                          "BANC",
+                          "FEUX",
+                          "HERO",
+                          "GARE",
+                          "DUEL",
+                          "AVEC",
+                          "CLEF",
+                          "COIN",
+                          "DOJO",
+                          "DORS",
+                          "EAUX",
+                          "FEVE",
+                          "FOUS",
+                          "FORT"};
         srand(time(NULL));
         char * wordRet = words[(rand() % 15)];
         //char * wordRet = words[11];
@@ -85,17 +88,20 @@ char* getRandomWord(){
 }
 
 void initGame(struct gamestate* gs){
-        gs->error = 0;
         gs->size = 4;
+        gs->error = 0;
         for (size_t i = 0; i < 4; i++) {
                 gs->word_to_find[i] = getRandomWord()[i];
                 gs->alreadyFound[i] = 0;
                 gs->word_found[i] = '_';
+                gs->clients[i] =-1;
+
         }
         gs->win = 0;
+        gs->currentClient = -1;
 
-        printf("%s\n",gs->word_to_find );
-        printf("%s\n",gs->word_found );
+        printf("[Parent] Word to find : %s\n",gs->word_to_find );
+        //  printf("%s\n",gs->word_found );
 
 }
 
@@ -133,6 +139,7 @@ int recvWithSize(int sock, char* data, char* ip, int port){
         char sizeToRecv[4];
         if(recvAll(sock, sizeToRecv, sizeof(sizeToRecv), ip, port) == 1) {return -1;};
         if(recvAll(sock, data, *((int*) sizeToRecv ), ip, port) == 1) {return -1;};
+        printf("received : %s\n", data);
         return *((int*) sizeToRecv );
 }
 
@@ -147,37 +154,27 @@ void sendStruct(int connfd, struct gamestate *gs){
         bzero(intToSend, 4);
 
         sprintf(intToSend, "%d", gs->win);
-        printf("%s\n", intToSend);
         sendWithSize(connfd, intToSend, strlen(intToSend));
         bzero(intToSend, 4);
 
         sprintf(intToSend, "%d", gs->size);
-        printf("%s\n", intToSend);
         sendWithSize(connfd, intToSend, strlen(intToSend));
         bzero(intToSend, 4);
 
         for (size_t i = 0; i < gs->size; i++) {
                 sprintf(intToSend, "%d", gs->alreadyFound[i]);
-                printf("%s - ", intToSend);
                 sendWithSize(connfd, intToSend, strlen(intToSend));
                 bzero(intToSend, 4);
         }
 
-        printf("%s\n", gs->word_found);
         char *wf = &gs->word_found[0];
         sendWithSize(connfd, wf, strlen(gs->word_found));
-
-
-        printf("%s\n", gs->word_to_find);
         sendWithSize(connfd, gs->word_to_find, strlen(gs->word_to_find));
 
 }
 
 void executePlay( int nLetter, char letter, struct gamestate* gs){
-        printf("You chose to put letter %c at place %d \n", letter, nLetter);
-
-        printf("%s \n",gs->word_to_find );
-        printf("%c -> %c \n", gs->word_to_find[nLetter-1], nLetter);
+        printf("User chose to put letter %c at place %d \n", letter, nLetter);
         if(gs->word_to_find[nLetter-1] == letter) {
                 gs->word_found[nLetter-1] = letter;
         }
@@ -185,49 +182,35 @@ void executePlay( int nLetter, char letter, struct gamestate* gs){
 }
 
 void sendNextSTep(int connfd, char* ip, int port, struct gamestate* gs){
+
         while(1) {
+
                 char intRec;
                 int letterNum;
+                printf("waiting user letter num ..");
                 recvWithSize(connfd, &intRec, ip, port);
                 letterNum = intRec - '0';
                 printf("letter from user : %d\n", letterNum);
 
                 char playRec;
+                printf("waiting user letter ..");
                 recvWithSize(connfd, &playRec, ip, port);
                 printf("play from user : %c\n", playRec);
                 char letter = playRec;
 
                 executePlay(letterNum,letter, gs);
-                sendStruct(connfd, gs);
+                //    sendStruct(connfd, gs);
+                for (size_t i = 0; i < 4; i++) {
+                        if ( gs->clients[i] != -1) {
+                                printf("[client %zu] -> %d sending update \n", i, gs->clients[i]);
+                                sendStruct(gs->clients[i], gs);
+                                printf("client %zu updated\n", i);
+                        }
+                }
+
         }
 }
 
-// THREAD
-void * reponseClient(void * par){
-
-  dataG * d;
-  d = (dataG *) par;
-  int dSclient = d->dSclient;
-  struct gamestate *gs = d->gs;
-  int port = d->port;
-  char* Rdata = d->Rdata;
-  char* ip = d->ip;
-
-  int connecte = 1;
-
-  while (connecte) {
-    int r = recvWithSize( dSclient, Rdata, ip, port);
-    if(r == -1) pthread_exit((void *)-1);
-    if(r == -2) connecte = 0;
-
-    //verification
-
-  ///  sendStruct(dSclient,gs);
-
-  }
-pthread_exit(NULL);
-
-}
 
 int main(int argc, char* argv[])
 {
@@ -288,7 +271,7 @@ int main(int argc, char* argv[])
 
                 struct sockaddr_in cli;
                 int len = sizeof(cli);
-              //  int connfd;
+                //  int connfd;
 
                 // Accept the data packet from client and verification
                 int connfd = accept(sockfd, (SA*)&cli, (socklen_t* ) &len);
@@ -296,7 +279,10 @@ int main(int argc, char* argv[])
                         printf("server acccept failed...\n");
                         exit(0);
                 }
+
                 int son;
+                ptrToGame->currentClient++;
+                ptrToGame->clients[ptrToGame->currentClient] = connfd;
 
                 if ( (son = fork()) == 0) {
                         key_t key = ftok("shmfile",65);
@@ -305,26 +291,17 @@ int main(int argc, char* argv[])
                                 printf("Error creating shared memory");
                                 exit(1);
                         }
-                        //struct gamestate *ptrToGame;
 
                         ptrToGame = shmat(shmid, NULL, 0);
-                        printf("fils : %s\n", ptrToGame->word_to_find);
                         close(sockfd);
                         printf(GRN "[Connection] client %s:%d connected.\n", inet_ntoa(cli.sin_addr),htons(cli.sin_port));
                         char *SelectFun[4];
 
-                        dataG D = { connfd ,ptrToGame,SelectFun , inet_ntoa(cli.sin_addr),cli.sin_port};
-                        dataG * d = &D;
-                        pthread_t idTh;
 
-                        // Création du thread qui va attendre une modification du client
-                        // if(pthread_create(&idTh, NULL, reponseClient, (void *)d) != 0) {
-                        //                 printf("Erreur lors de la création du thread reponseClient\n");
-                        //                 return -1;
-                        // }
-                        recvWithSize(connfd, SelectFun, inet_ntoa(cli.sin_addr),cli.sin_port);
-                         bzero(SelectFun, 4);
-                         sendStruct(connfd, ptrToGame);
+                        recvWithSize(connfd, buff, inet_ntoa(cli.sin_addr),cli.sin_port);
+                        bzero(SelectFun, 4);
+
+                        sendStruct(connfd, ptrToGame);
 
                         sendNextSTep(connfd, inet_ntoa(cli.sin_addr),cli.sin_port, ptrToGame);
                 }

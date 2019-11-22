@@ -6,7 +6,7 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <string.h>
-
+#include <pthread.h>
 /* colors define */
 #define RED   "\x1B[31m"
 #define GRN   "\x1B[32m"
@@ -29,6 +29,13 @@ struct gamestate {
         int size;
         char word_found[];
 
+};
+struct connInfos {
+        int sockfd;
+        struct gamestate * gs;
+        char * buff;
+        char * ip;
+        int port;
 };
 
 int recvAll(int socket, char *buf, int len, char* ip, int port) { // recvAll function
@@ -109,6 +116,7 @@ void recvStruct(int sockfd, struct gamestate *gs, char* buff, char * ip, int por
 
 }
 
+
 void errorPrint(int error){
         char HANG_STATES[7][10 * 9] =
         {
@@ -136,13 +144,22 @@ void printGUI(char* s){
                 printf("-");
         }
 }
+// int totalError(struct gamestate *gs){
+//         int res;
+//         for (size_t i = 0; i < 4; i++) {
+//                 res+=gs->error[i];
+//         }
+//         return res;
+// }
+
 void gamePrint(struct gamestate* gs){
+        system("clear");
         switch (gs->win) {
         case 0:
                 printf("\n\n\n"); errorPrint(gs->error);
                 printf("\n\n\n");
                 printf("+-------------"); printGUI(gs->word_found); printf("-------------+"); printf("\t"); printf("+--------------------+\n");
-                printf("|%8s  Word : %s %8s|", "",gs->word_found,""); printf("\t"); printf("|    error : %d/8     |\n",gs->error);
+                printf("|%8s  Word : %s %8s |", "",gs->word_found,""); printf("\t"); printf("|    error : %d/8     |\n",gs->error);
                 printf("+-------------"); printGUI(gs->word_found); printf("-------------+"); printf("\t"); printf("+--------------------+\n");
 
 
@@ -153,16 +170,27 @@ void gamePrint(struct gamestate* gs){
         case -1:
                 errorPrint(gs->error); printf("Word : %s", gs->word_found); printf("\nYou didn't found the word, you're dead !\n" );
         }
+        printf("\n\n\n");
+        printf("Which letter you want to edit ? > ");
+        fflush(stdout);
+}
+
+
+void * threadUpdate(void* param){
+        while(1) {
+                struct connInfos * ci = (struct connInfos *)param;
+                recvStruct(ci->sockfd, ci->gs, ci->buff,ci->ip, ci->port);
+                gamePrint(ci->gs);
+
+        }
 }
 
 void recvNextStep(int sockfd, char* buff, struct gamestate *gs, char* ip, int port ){
         while(1) {
-                system("clear");
+
                 gamePrint(gs);
-                printf("\n\n\n");
                 int nLetter;
                 char letter;
-                printf("Which letter you want to edit ? >");
                 scanf("%d", &nLetter);
 
                 char intToSend[4];
@@ -174,19 +202,13 @@ void recvNextStep(int sockfd, char* buff, struct gamestate *gs, char* ip, int po
 
                 printf("\n Letter > ");
                 scanf("\n%c", &letter);
-
-
                 sendWithSize(sockfd, &letter, 1);
                 bzero(&letter, 1);
 
+                //recvStruct(sockfd, gs, buff,ip, port);
 
-                recvStruct(sockfd, gs,buff,ip, port);
                 if ( gs->win == -1 ) { break;}
                 if ( gs->win == 1 ) { break;}
-                system("clear");
-                gamePrint(gs);
-                printf("\n\n\n");
-                printf("Play > ");
         }
 }
 
@@ -235,9 +257,19 @@ int main(int argc, char* argv[])
         sprintf(toEdit, "%d", n);
         sendWithSize(sockfd, toEdit, strlen(toEdit));
         bzero(toEdit, 4);
+        struct connInfos ci;
+        ci.sockfd = sockfd;
+        ci.buff = buff;
+        ci.gs = &gs;
+        ci.ip =  argv[1];
+        ci.port = atoi(argv[2]);
+        pthread_t updt;
 
-        recvStruct(sockfd, &gs,buff,argv[1], atoi(argv[2]));
-
+        if (pthread_create(&updt, NULL, threadUpdate, &ci) < 0) {
+                fprintf(stderr, "    * [Main] pthread_create error for thread 1 * %s\n",
+                        " ");
+                exit(1);
+        }
         recvNextStep(sockfd,buff, &gs, argv[1], atoi(argv[2]));
 
         if ( gs.win == -1 || gs.win == 1) {   system("clear");
