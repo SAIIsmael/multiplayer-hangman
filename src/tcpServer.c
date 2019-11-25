@@ -62,6 +62,13 @@ struct connInfos {
         struct gamestate * gs;
 };
 
+union semun {
+  int val ;
+  struct semid_ds *buf;
+  unsigned short * array;
+  struct seminfo * _buf;
+};
+
 int semP(short PVal, int idSem, int numSem){
         struct sembuf op[] = {
                 { numSem, -PVal, SEM_UNDO } //lock
@@ -367,12 +374,13 @@ int main(int argc, char* argv[])
                 ptrToGame->clients[ptrToGame->currentClient] = connfd;
 
                 if ( (son = fork()) == 0) {
-                        key_t key = ftok("shmfile",65);
+                        key_t key = ftok("shmfile.txt",65);
                         int shmid = shmget(key,sizeof(struct gamestate),0666|IPC_CREAT);
                         key_t keysem = ftok("shmfile", 10);
                         int idSem = semget(keysem, 5, IPC_CREAT|0666);
                         if(shmid < 0) {
-                                printf("Error creating shared memory");
+
+                                perror("Error creating shared memory");
                                 exit(1);
                         }
                         semctl(idSem, 5, SETVAL, semctl(idSem, 5, GETVAL) + 1);
