@@ -27,8 +27,8 @@ struct gamestate {
         char* word_to_find;
         int* alreadyFound;
         int size;
+        int errormsg;
         char word_found[];
-
 };
 struct connInfos {
         int sockfd;
@@ -114,6 +114,8 @@ void recvStruct(int sockfd, struct gamestate *gs, char* buff, char * ip, int por
         //    printf("recv wtf: %s\n", gs->word_to_find);
         bzero(buff, BUFF_SIZE);
 
+        recvWithSize(sockfd, buff, ip, port);
+        gs->errormsg = atoi(buff);
 }
 
 
@@ -152,7 +154,7 @@ void printGUI(char* s){
 //         return res;
 // }
 
-void gamePrint(struct gamestate* gs){
+void gamePrint(struct gamestate* gs, int sockfd){
         system("clear");
         switch (gs->win) {
         case 0:
@@ -170,8 +172,15 @@ void gamePrint(struct gamestate* gs){
         case -1:
                 errorPrint(gs->error); printf("Word : %s", gs->word_found); printf("\nYou didn't found the word, you're dead !\n" );
         }
-        printf("\n\n\n");
-        printf("Which letter you want to edit ? > ");
+        if ( gs->errormsg == 0) {
+                printf("\n\n\n");
+                printf("Which letter you want to edit ? > ");
+        }else{
+                printf("You can't edit this letter right now\n" );
+                char a = 'a';
+                sendWithSize(sockfd, &a, 1);
+                bzero(&a, 1);
+        }
         fflush(stdout);
 }
 
@@ -180,7 +189,7 @@ void * threadUpdate(void* param){
         while(1) {
                 struct connInfos * ci = (struct connInfos *)param;
                 recvStruct(ci->sockfd, ci->gs, ci->buff,ci->ip, ci->port);
-                gamePrint(ci->gs);
+                gamePrint(ci->gs, ci->sockfd);
 
         }
 }
@@ -188,7 +197,7 @@ void * threadUpdate(void* param){
 void recvNextStep(int sockfd, char* buff, struct gamestate *gs, char* ip, int port ){
         while(1) {
 
-                gamePrint(gs);
+                gamePrint(gs, sockfd);
                 int nLetter;
                 char letter;
                 scanf("%d", &nLetter);
@@ -273,7 +282,7 @@ int main(int argc, char* argv[])
         recvNextStep(sockfd,buff, &gs, argv[1], atoi(argv[2]));
 
         if ( gs.win == -1 || gs.win == 1) {   system("clear");
-                                              gamePrint(&gs);}
+                                              gamePrint(&gs, sockfd);}
         printf(MAG "[Quit] client closed. Bye bye.\n");
         printf(RESET "\n" );
         return 0;

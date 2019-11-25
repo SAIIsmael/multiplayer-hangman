@@ -52,17 +52,38 @@ struct gamestate {
         char word_found[4];
         int clients[4];
         int currentClient;
+        int errormsg;
 
 };
 typedef struct dataGame dataG;
 
-struct dataGame {
-        int dSclient;
-        struct gamestate *gs;
-        int port;
-        char* Rdata;
-        char* ip;
+struct connInfos {
+        int connfd;
+        struct gamestate * gs;
 };
+
+int semP(short PVal, int idSem, int numSem){
+        struct sembuf op[] = {
+                { numSem, -PVal, SEM_UNDO } //lock
+        };
+        return semop(idSem, op, 0);
+
+}
+
+void semV(short VVal, int idSem, int numSem){
+        struct sembuf op[] = {
+                { numSem, VVal, SEM_UNDO }, //unlock
+        };
+        semop(idSem, op, 0);
+
+}
+
+void semZ(int idSem, int numSem){
+        struct sembuf op[] = {
+                { numSem, 0, SEM_UNDO }, //unlock
+        };
+        semop(idSem, op, 0);
+}
 
 char* getRandomWord(){
         char* words[16]= {"COIN",
@@ -99,7 +120,7 @@ void initGame(struct gamestate* gs){
         }
         gs->win = 0;
         gs->currentClient = -1;
-
+        gs->errormsg = 0;
         printf("[Parent] Word to find : %s\n",gs->word_to_find );
         //  printf("%s\n",gs->word_found );
 
@@ -171,9 +192,14 @@ void sendStruct(int connfd, struct gamestate *gs){
         sendWithSize(connfd, wf, strlen(gs->word_found));
         sendWithSize(connfd, gs->word_to_find, strlen(gs->word_to_find));
 
+        sprintf(intToSend, "%d", gs->errormsg);
+        sendWithSize(connfd, intToSend, strlen(intToSend));
+        bzero(intToSend, 4);
+
 }
 
 void executePlay( int nLetter, char letter, struct gamestate* gs){
+        if( gs->errormsg > 0 ) { gs->errormsg = 0;}
         printf("User chose to put letter %c at place %d \n", letter, nLetter);
         if(gs->word_to_find[nLetter-1] == letter) {
                 gs->word_found[nLetter-1] = letter;
@@ -181,16 +207,65 @@ void executePlay( int nLetter, char letter, struct gamestate* gs){
         else{ gs->error++;}
 }
 
+void* updateThread(void* param){
+        struct connInfos *c = (struct connInfos *) param;
+        struct sembuf opP[] = {
+                {4, -1, SEM_UNDO},
+                {4, 0, SEM_UNDO}
+        };
+        key_t keysem = ftok("shmfile", 10);
+        int idSem = semget(keysem, 5, IPC_CREAT|0666);
+        printf(" currentClient -> %d\n", c->gs->currentClient);
+        while (1) {
+                if ( semctl(idSem, 4, GETVAL) > 0 ) {
+                        printf("update needed -> %d \n", semctl(idSem, 4, GETVAL));
+                        semop(idSem, opP, 1);
+                        sendStruct(c->connfd, c->gs);
+                        printf("waiting for all clients updated (%d left )\n",semctl(idSem, 4, GETVAL) );
+                        semop(idSem, opP+1, 1);
+                }
+
+        }
+}
+
 void sendNextSTep(int connfd, char* ip, int port, struct gamestate* gs){
+        key_t keysem = ftok("shmfile", 10);
+        int idSem = semget(keysem, 5, IPC_CREAT|0666);
+        for (size_t i = 0; i < 5; i++) {
+                printf("idSem at %zu -> %d \n", i, semctl(idSem, i, GETVAL) );
+        }
+        printf("currentClient -> %d \n", semctl(idSem, 4, GETVAL));
+        struct sembuf opP[] = {
+                {0, -1, SEM_UNDO},
+                {1, -1, SEM_UNDO},
+                {2, -1, SEM_UNDO},
+                {3, -1, SEM_UNDO}
+        };
+
+        struct sembuf opV[] = {
+                {0, 1, SEM_UNDO},
+                {1, 1, SEM_UNDO},
+                {2, 1, SEM_UNDO},
+                {3, 1, SEM_UNDO},
+                {4, gs->currentClient+1, SEM_UNDO}
+        };
 
         while(1) {
-
                 char intRec;
                 int letterNum;
                 printf("waiting user letter num ..");
                 recvWithSize(connfd, &intRec, ip, port);
                 letterNum = intRec - '0';
                 printf("letter from user : %d\n", letterNum);
+
+                if ( semctl(idSem, letterNum-1, GETVAL) == 0 ) {
+                        printf("you can't edit this letter for the moment \n");
+                        gs->errormsg = letterNum-1;
+                        sendStruct(connfd, gs);
+                }
+
+                if ( semop(idSem, opP+(letterNum-1), 1) < 0 ) { perror("op P : "); exit(1);}
+                printf("letter %d lock, semaphore value : %d\n", letterNum-1,semctl(idSem, letterNum-1, GETVAL));
 
                 char playRec;
                 printf("waiting user letter ..");
@@ -199,18 +274,17 @@ void sendNextSTep(int connfd, char* ip, int port, struct gamestate* gs){
                 char letter = playRec;
 
                 executePlay(letterNum,letter, gs);
-                //    sendStruct(connfd, gs);
-                for (size_t i = 0; i < 4; i++) {
-                        if ( gs->clients[i] != -1) {
-                                printf("[client %zu] -> %d sending update \n", i, gs->clients[i]);
-                                sendStruct(gs->clients[i], gs);
-                                printf("client %zu updated\n", i);
-                        }
-                }
+
+                if ( semop(idSem, opV+4, 1) < 0 ) { perror("op P : "); exit(1);}
+                printf("We need update for %d clients \n", semctl(idSem, 4, GETVAL) +1 );
+
+                if ( semop(idSem, opV+(letterNum-1), 1) < 0 ) { perror("op P : "); exit(1);}
+                printf("letter %d unlock, semaphore value : %d\n", letterNum-1,semctl(idSem, letterNum-1, GETVAL));
+                //sendStruct(connfd, gs);
+
 
         }
 }
-
 
 int main(int argc, char* argv[])
 {
@@ -260,6 +334,16 @@ int main(int argc, char* argv[])
         ptrToGame = shmat(shmid, NULL, 0);
         initGame(ptrToGame);
 
+        key_t keysem = ftok("shmfile", 10);
+        int idSem = semget(keysem, 5, IPC_CREAT|0666);
+        union semun egCtrl;
+        egCtrl.array = malloc(sizeof(unsigned short)*4);
+        for (size_t i = 0; i < 4; i++) {
+                egCtrl.array[i] = 1;
+        }
+        egCtrl.array[4]= 0;
+        semctl(idSem, 0, SETALL, egCtrl);
+
         printf(CYN "\n==========================================\n");
         printf(CYN "|            SERVER %s:%d         |\n", ipServ,htons(servaddr.sin_port));
         printf(CYN "==========================================\n");
@@ -287,23 +371,38 @@ int main(int argc, char* argv[])
                 if ( (son = fork()) == 0) {
                         key_t key = ftok("shmfile",65);
                         int shmid = shmget(key,sizeof(struct gamestate),0666|IPC_CREAT);
+                        key_t keysem = ftok("shmfile", 10);
+                        int idSem = semget(keysem, 5, IPC_CREAT|0666);
                         if(shmid < 0) {
                                 printf("Error creating shared memory");
                                 exit(1);
                         }
 
                         ptrToGame = shmat(shmid, NULL, 0);
+
                         close(sockfd);
                         printf(GRN "[Connection] client %s:%d connected.\n", inet_ntoa(cli.sin_addr),htons(cli.sin_port));
                         char *SelectFun[4];
-
+                        pthread_t update;
+                        struct connInfos c;
+                        c.connfd = connfd;
+                        c.gs = ptrToGame;
 
                         recvWithSize(connfd, buff, inet_ntoa(cli.sin_addr),cli.sin_port);
                         bzero(SelectFun, 4);
 
                         sendStruct(connfd, ptrToGame);
 
+                        if (pthread_create(&update, NULL, updateThread, &c) < 0) {
+                                fprintf(stderr, "    * [Main] pthread_create error for thread 1 * %s\n",
+                                        " ");
+                                exit(1);
+                        }
+
                         sendNextSTep(connfd, inet_ntoa(cli.sin_addr),cli.sin_port, ptrToGame);
+
+
+
                 }
                 if ( son == father ) {wait(&son);}
 
