@@ -215,13 +215,13 @@ void* updateThread(void* param){
         };
         key_t keysem = ftok("shmfile", 10);
         int idSem = semget(keysem, 5, IPC_CREAT|0666);
-        printf(" currentClient -> %d\n", c->gs->currentClient);
+
         while (1) {
                 if ( semctl(idSem, 4, GETVAL) > 0 ) {
-                        printf("update needed -> %d \n", semctl(idSem, 4, GETVAL));
+                        //  printf("update needed -> %d \n", semctl(idSem, 5, GETVAL));
                         semop(idSem, opP, 1);
                         sendStruct(c->connfd, c->gs);
-                        printf("waiting for all clients updated (%d left )\n",semctl(idSem, 4, GETVAL) );
+                        printf("waiting for all clients updated (%d/%d )\n",semctl(idSem, 4, GETVAL), semctl(idSem, 5, GETVAL) );
                         semop(idSem, opP+1, 1);
                 }
 
@@ -231,10 +231,9 @@ void* updateThread(void* param){
 void sendNextSTep(int connfd, char* ip, int port, struct gamestate* gs){
         key_t keysem = ftok("shmfile", 10);
         int idSem = semget(keysem, 5, IPC_CREAT|0666);
-        for (size_t i = 0; i < 5; i++) {
+        for (size_t i = 0; i < 6; i++) {
                 printf("idSem at %zu -> %d \n", i, semctl(idSem, i, GETVAL) );
         }
-        printf("currentClient -> %d \n", semctl(idSem, 4, GETVAL));
         struct sembuf opP[] = {
                 {0, -1, SEM_UNDO},
                 {1, -1, SEM_UNDO},
@@ -246,8 +245,7 @@ void sendNextSTep(int connfd, char* ip, int port, struct gamestate* gs){
                 {0, 1, SEM_UNDO},
                 {1, 1, SEM_UNDO},
                 {2, 1, SEM_UNDO},
-                {3, 1, SEM_UNDO},
-                {4, gs->currentClient+1, SEM_UNDO}
+                {3, 1, SEM_UNDO}
         };
 
         while(1) {
@@ -275,9 +273,8 @@ void sendNextSTep(int connfd, char* ip, int port, struct gamestate* gs){
 
                 executePlay(letterNum,letter, gs);
 
-                if ( semop(idSem, opV+4, 1) < 0 ) { perror("op P : "); exit(1);}
-                printf("We need update for %d clients \n", semctl(idSem, 4, GETVAL) +1 );
-
+                semctl(idSem, 4, SETVAL, semctl(idSem, 5, GETVAL));
+                printf("we need update for %d clients \n", semctl(idSem, 4, GETVAL));
                 if ( semop(idSem, opV+(letterNum-1), 1) < 0 ) { perror("op P : "); exit(1);}
                 printf("letter %d unlock, semaphore value : %d\n", letterNum-1,semctl(idSem, letterNum-1, GETVAL));
                 //sendStruct(connfd, gs);
@@ -335,13 +332,14 @@ int main(int argc, char* argv[])
         initGame(ptrToGame);
 
         key_t keysem = ftok("shmfile", 10);
-        int idSem = semget(keysem, 5, IPC_CREAT|0666);
+        int idSem = semget(keysem, 6, IPC_CREAT|0666);
         union semun egCtrl;
         egCtrl.array = malloc(sizeof(unsigned short)*4);
         for (size_t i = 0; i < 4; i++) {
                 egCtrl.array[i] = 1;
         }
         egCtrl.array[4]= 0;
+        egCtrl.array[5]=0;
         semctl(idSem, 0, SETALL, egCtrl);
 
         printf(CYN "\n==========================================\n");
@@ -377,7 +375,7 @@ int main(int argc, char* argv[])
                                 printf("Error creating shared memory");
                                 exit(1);
                         }
-
+                        semctl(idSem, 5, SETVAL, semctl(idSem, 5, GETVAL) + 1);
                         ptrToGame = shmat(shmid, NULL, 0);
 
                         close(sockfd);
