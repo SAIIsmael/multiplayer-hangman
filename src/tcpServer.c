@@ -153,10 +153,14 @@ int sendWithSize(int sock, const char* data, int data_length){
 
 int recvAll(int socket, char *buf, int len, char* ip, int port) { // recvAll function
         int remaining = len;
+    key_t keysem = ftok("shmfile", 10);
+        int idSem = semget(keysem, 5, IPC_CREAT|0666);
 
         while (remaining) {
                 int received = recv(socket, buf, remaining, 0);
-                if (received <= 0) { printf(MAG "[Quit] Client %s:%d disconnected !\n", ip, port); return 1;}
+                if (received <= 0) { semctl(idSem,5,SETVAL,semctl(idSem,5,GETVAL) -1);printf(MAG "[Quit] Client %s:%d disconnected !\n", ip, port);
+                return 1;
+            }
                 buf += received;
                 remaining -= received;
         }
@@ -212,7 +216,20 @@ void executePlay( int nLetter, char letter, struct gamestate* gs){
                 gs->word_found[nLetter-1] = letter;
         }
         else{ gs->error++;}
-}
+        if ( gs->error == 8) { gs->win = -1;}
+        char wfound[4];
+
+        for (int i = 0; i < 4; ++i)
+        {
+        	wfound[i] = gs->word_found[i];
+        }
+
+        if ( strcmp(gs->word_to_find, wfound) == 0) { gs->win = 1;}
+        printf("%s\n", wfound);
+        printf("%s\n", gs->word_to_find);
+
+    }
+
 
 void* updateThread(void* param){
         struct connInfos *c = (struct connInfos *) param;
@@ -262,14 +279,19 @@ void sendNextSTep(int connfd, char* ip, int port, struct gamestate* gs){
                 recvWithSize(connfd, &intRec, ip, port);
                 letterNum = intRec - '0';
                 printf("letter from user : %d\n", letterNum);
-
-                if ( semctl(idSem, letterNum-1, GETVAL) == 0 ) {
-                        printf("you can't edit this letter for the moment \n");
-                        gs->errormsg = letterNum-1;
-                        sendStruct(connfd, gs);
+                printf("%d",semctl(idSem, letterNum-1, GETVAL));
+                
+              if ( semctl(idSem, letterNum-1, GETVAL) == 0 ) {
+                        printf(MAG "you can't edit this letter for the moment \n");
+                        gs->errormsg = letterNum;
+                        bzero(&intRec,1);
                 }
 
+                else {
+                	printf("qqqqqqqqqq%d\n", gs->errormsg);
+                if(gs->errormsg == 0) {
                 if ( semop(idSem, opP+(letterNum-1), 1) < 0 ) { perror("op P : "); exit(1);}
+
                 printf("letter %d lock, semaphore value : %d\n", letterNum-1,semctl(idSem, letterNum-1, GETVAL));
 
                 char playRec;
@@ -285,7 +307,8 @@ void sendNextSTep(int connfd, char* ip, int port, struct gamestate* gs){
                 if ( semop(idSem, opV+(letterNum-1), 1) < 0 ) { perror("op P : "); exit(1);}
                 printf("letter %d unlock, semaphore value : %d\n", letterNum-1,semctl(idSem, letterNum-1, GETVAL));
                 //sendStruct(connfd, gs);
-
+            	}
+				}
 
         }
 }
@@ -406,8 +429,12 @@ int main(int argc, char* argv[])
                         }
 
                         sendNextSTep(connfd, inet_ntoa(cli.sin_addr),cli.sin_port, ptrToGame);
-
-
+                                 struct sembuf op[] = {
+                {5, -1, SEM_UNDO}
+          
+        };
+ 				semop(idSem,op,1);
+                printf("%d\n",semget(idSem,5,GETVAL) );
 
                 }
                 if ( son == father ) {wait(&son);}

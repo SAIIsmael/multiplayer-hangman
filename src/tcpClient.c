@@ -170,10 +170,11 @@ void gamePrint(struct gamestate* gs, int sockfd){
                 errorPrint(gs->error); printf("Word : %s", gs->word_found); printf("\nYou found the word ! Congrats ! \n");
                 break;
         case -1:
-                errorPrint(gs->error); printf("Word : %s", gs->word_found); printf("\nYou didn't found the word, you're dead !\n" );
+                 printf("Word : %s", gs->word_found); printf("\nYou didn't found the word, you're dead !\n" );
         }
         if ( gs->errormsg == 0) {
                 printf("\n\n\n");
+                printf("ERRORMSG RCV -> %d\n",gs->errormsg );
                 printf("Which letter you want to edit ? > ");
         }else{
                 printf("You can't edit this letter right now\n" );
@@ -201,13 +202,11 @@ void recvNextStep(int sockfd, char* buff, struct gamestate *gs, char* ip, int po
                 int nLetter;
                 char letter;
                 scanf("%d", &nLetter);
-
                 char intToSend[4];
                 sprintf(intToSend, "%d", nLetter);
                 printf("%s\n", intToSend);
                 sendWithSize(sockfd, intToSend, strlen(intToSend));
                 bzero(intToSend, 4);
-
 
                 printf("\n Letter > ");
                 scanf("\n%c", &letter);
