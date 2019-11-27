@@ -28,6 +28,7 @@ struct gamestate {
         int* alreadyFound;
         int size;
         int errormsg;
+        int saveplay;
         char word_found[];
 };
 struct connInfos {
@@ -158,30 +159,42 @@ void gamePrint(struct gamestate* gs, int sockfd){
         system("clear");
         switch (gs->win) {
         case 0:
+                printf(WHT "\n===============\n");
+                printf(CYN "|   HANGMAN   |\n");
+                printf(WHT "===============\n");
                 printf("\n\n\n"); errorPrint(gs->error);
                 printf("\n\n\n");
                 printf("+-------------"); printGUI(gs->word_found); printf("-------------+"); printf("\t"); printf("+--------------------+\n");
-                printf("|%8s  Word : %s %8s |", "",gs->word_found,""); printf("\t"); printf("|    error : %d/8     |\n",gs->error);
+                printf(WHT "|%8s  Word : "MAG "%s"WHT " %8s |", "",gs->word_found,""); printf("\t"); printf(WHT "|    error : "MAG "%d"WHT "/8     |\n",gs->error);
                 printf("+-------------"); printGUI(gs->word_found); printf("-------------+"); printf("\t"); printf("+--------------------+\n");
 
 
                 break;
         case 1:
-                errorPrint(gs->error); printf("Word : %s", gs->word_found); printf("\nYou found the word ! Congrats ! \n");
+                printf(WHT "\n=====================\n");
+                printf(GRN "|      GOODJOB      |\n");
+                printf(WHT "=====================\n");
+                printf(WHT "The Word was : " MAG "%s", gs->word_found);
+                printf(GRN "\nYou found the word ! Congrats ! \n");
                 break;
         case -1:
-                 printf("Word : %s", gs->word_found); printf("\nYou didn't found the word, you're dead !\n" );
+                printf(WHT "\n=====================\n");
+                printf(MAG "|      LOSERS       |\n");
+                printf(WHT "=====================\n");
+                printf(WHT "The Word was : " MAG "%s", gs->word_to_find);
+                printf(MAG "\nYou did not found the word ! \n");
         }
-        if ( gs->errormsg == 0) {
-                printf("\n\n\n");
-                printf("ERRORMSG RCV -> %d\n",gs->errormsg );
-                printf("Which letter you want to edit ? > ");
-        }else{
-                printf("You can't edit this letter right now\n" );
-                char a = 'a';
-                sendWithSize(sockfd, &a, 1);
-                bzero(&a, 1);
+        if ( gs->win == 0 ) {
+                if ( gs->errormsg != 0) {
+                        printf("Somebody is already editing this letter, chose another one. \n");
+                        printf("Which letter you want to edit ? > ");
+                }
+                else{
+                        printf("\n\n\n");
+                        printf("Which letter you want to edit ? > ");
+                }
         }
+
         fflush(stdout);
 }
 
@@ -206,17 +219,22 @@ void recvNextStep(int sockfd, char* buff, struct gamestate *gs, char* ip, int po
                 sprintf(intToSend, "%d", nLetter);
                 printf("%s\n", intToSend);
                 sendWithSize(sockfd, intToSend, strlen(intToSend));
+                gs->saveplay = atoi(intToSend);
                 bzero(intToSend, 4);
+
+                fflush(stdout);
+                fflush(stdin);
 
                 printf("\n Letter > ");
                 scanf("\n%c", &letter);
                 sendWithSize(sockfd, &letter, 1);
                 bzero(&letter, 1);
 
-                //recvStruct(sockfd, gs, buff,ip, port);
-
                 if ( gs->win == -1 ) { break;}
                 if ( gs->win == 1 ) { break;}
+                //recvStruct(sockfd, gs, buff,ip, port);
+
+
         }
 }
 
