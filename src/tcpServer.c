@@ -9,15 +9,17 @@
 int main(int argc, char* argv[])
 {
         int father = getpid();
-        if ( argc != 2 ) {
+        if ( argc < 2 ) {
                 printf(MAG "[Error] Unrecognize command. \n");
-                printf(CYN "[Usage] ./tcpServer [portServer] \n");
+                printf(CYN "[Usage] ./tcpServer [portServer][nbClients] \n");
                 printf(MAG "portServer:" WHT "Port you want to use for your server\n");
+                printf(MAG "nbClients:" WHT "How many simultaneous clients can connect to your server \n");
                 printf(MAG "[Error] Program exited. \n");
                 exit(1);
         }
 
         int sockfd;
+        int nbClients = atoi(argv[2]);
         struct sockaddr_in servaddr;
         char buff[BUFF_SIZE];
 
@@ -51,7 +53,7 @@ int main(int argc, char* argv[])
         initGame(ptrToGame);
 
         key_t keysem = ftok("shmfile", 10);
-        int idSem = semget(keysem, 6, IPC_CREAT|0666);
+        int idSem = semget(keysem, 7, IPC_CREAT|0666);
         union semun egCtrl;
         egCtrl.array = malloc(sizeof(unsigned short)*4);
         for (size_t i = 0; i < 4; i++) {
@@ -59,13 +61,14 @@ int main(int argc, char* argv[])
         }
         egCtrl.array[4]= 0;
         egCtrl.array[5]=0;
+        egCtrl.array[6]=1;
         semctl(idSem, 0, SETALL, egCtrl);
 
         printf(CYN "\n==========================================\n");
         printf(CYN "|            SERVER %s:%d         |\n", ipServ,htons(servaddr.sin_port));
         printf(CYN "==========================================\n");
         while(1) {
-                if ((listen(sockfd, 10)) != 0) {
+                if ((listen(sockfd, nbClients)) != 0) {
                         printf("Listen failed...\n");
                         exit(0);
                        if ( semctl(idSem, 6, IPC_RMID) < 0){
@@ -95,7 +98,7 @@ int main(int argc, char* argv[])
                         key_t key = ftok("shmfile.txt",65);
                         int shmid = shmget(key,sizeof(struct gamestate),0666|IPC_CREAT);
                         key_t keysem = ftok("shmfile", 10);
-                        int idSem = semget(keysem, 5, IPC_CREAT|0666);
+                        int idSem = semget(keysem, 7, IPC_CREAT|0666);
                         if(shmid < 0) {
 
                                 perror("Error creating shared memory");

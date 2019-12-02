@@ -86,7 +86,7 @@ int sendWithSize(int sock, const char* data, int data_length){
 int recvAll(int socket, char *buf, int len, char* ip, int port) {    // recvAll function
         int remaining = len;
   key_t keysem = ftok("shmfile", 10);
-        int idSem = semget(keysem, 5, IPC_CREAT|0666); 
+        int idSem = semget(keysem, 7, IPC_CREAT|0666); 
         while (remaining) {
                 int received = recv(socket, buf, remaining, 0);
                 if (received <= 0) {
@@ -142,7 +142,8 @@ void sendStruct(int connfd, struct gamestate *gs){
 void executePlay( int nLetter, char letter, struct gamestate* gs){
         printf(CYN "[PROC %d] User chose to put letter %c at place %d \n", getpid(),letter, nLetter);
         if(gs->word_to_find[nLetter-1] == letter) {
-                gs->word_found[nLetter-1] = letter;
+                
+                gs->word_found[nLetter-1] = toupper(letter);
         }
         else{
                 gs->error++;
@@ -169,7 +170,7 @@ void* updateThread(void* param){
         };
 
           key_t keysem = ftok("shmfile", 10);
-        int idSem = semget(keysem, 5, IPC_CREAT|0666);
+        int idSem = semget(keysem, 7, IPC_CREAT|0666);
 
         while (1) {
                 if ( semctl(idSem, 4, GETVAL) > 0 ) {
@@ -185,7 +186,7 @@ void* updateThread(void* param){
 }
 void sendNextSTep(int connfd, char* ip, int port, struct gamestate* gs){
         key_t keysem = ftok("shmfile", 10);
-        int idSem = semget(keysem, 5, IPC_CREAT|0666);
+        int idSem = semget(keysem, 7, IPC_CREAT|0666);
         for (size_t i = 0; i < 6; i++) {
                 printf("idSem at %zu -> %d \n", i, semctl(idSem, i, GETVAL) );
         }
@@ -193,36 +194,40 @@ void sendNextSTep(int connfd, char* ip, int port, struct gamestate* gs){
                 {0, -1, SEM_UNDO},
                 {1, -1, SEM_UNDO},
                 {2, -1, SEM_UNDO},
-                {3, -1, SEM_UNDO}
+                {3, -1, SEM_UNDO},
+                {6, -1, SEM_UNDO}
         };
 
         struct sembuf opV[] = {
                 {0, 1, SEM_UNDO},
                 {1, 1, SEM_UNDO},
                 {2, 1, SEM_UNDO},
-                {3, 1, SEM_UNDO}
+                {3, 1, SEM_UNDO},
+                {6, 1, SEM_UNDO}
         };
 
         while(1) {
                 char intRec;
                 int letterNum;
+                bzero(&intRec,1);
                 printf("waiting user letter num ..");
                 recvWithSize(connfd, &intRec, ip, port);
-                letterNum = intRec - '0';
+                letterNum = (int) intRec - 48;
                 printf("letter from user : %d\n", letterNum);
-
                 bzero(&intRec,1);
-                        for (size_t i = 0; i < 6; i++) {
-                printf("idSem at %zu -> %d \n", i, semctl(idSem, i, GETVAL) );
-        }
-                if ( semctl(idSem, letterNum-1, GETVAL) == 0 ) {
+
+                 semop(idSem, opP+4, 1);
+                int error = semctl(idSem, letterNum-1, GETVAL);
+                 semop(idSem, opV+4, 1);
+
+                if ( error == 0 ) {
                         printf(MAG "you can't edit this letter for the moment \n");
                         gs->errormsg[letterNum-1] = letterNum;
                         printf("error at %d -> %d \n", letterNum-1, letterNum);
                         sendStruct(connfd, gs);
                         fflush(stdout);
-                }
 
+                }
                 else {
                      sendStruct(connfd, gs);
                         if(gs->errormsg[letterNum-1] == 0) {

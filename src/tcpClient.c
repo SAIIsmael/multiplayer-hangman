@@ -268,16 +268,27 @@ void recvNextStep(int sockfd, char* buff, struct gamestate *gs, char* ip, int po
         while(1) {
                 char nLetter;
                 char intToSend[4];
+                int number;
 
                 ps->step = 1;
                 scanf("%c", &nLetter);
-                char ch;
-                while(  ch != '\n' && getchar() != '\n' ){ /* flush to end of input line */ }
-                printf("%c\n", nLetter);
+                number = (int) nLetter - 48;
+                while(number > 4 ) {
+                    char ch;
+                    while(  ch != '\n' && getchar() != '\n' ){ /* flush to end of input line */ }
+
+                    printf("veuillez  saisir un nombrre entre 1 et 4  \n");
+                    scanf("%c", &nLetter);
+                    number = (int) nLetter - 48;
+
+                    while(  ch != '\n' && getchar() != '\n' ){ /* flush to end of input line */ }
+
+                }
+
                 sendWithSize(sockfd, &nLetter, 1);
                  ps->step = 2;
                 bzero(intToSend, 4);
-                int number = nLetter - '0';
+                number = (int) nLetter - 48;
                  ps->nLetter = number-1;
 
                 pthread_cond_wait(cond, lock);
@@ -295,8 +306,10 @@ void recvNextStep(int sockfd, char* buff, struct gamestate *gs, char* ip, int po
 
                 if ( gs->errormsg[number-1] == 0) {
                         scanf("%c", &letter);
-                        char ch;
-                        while( ch != '\n' && getchar() != '\n' ){ /* flush to end of input line */ }
+                            char ch;
+                            while( ch != '\n' && getchar() != '\n' ){ /* flush to end of input line */ }
+                            
+                            printf("veuillez  saisir une lettre \n");
                         char lettertosend = letter;
                         sendWithSize(sockfd, &lettertosend, 1);
                         bzero(&letter, 1);
