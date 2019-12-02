@@ -216,9 +216,10 @@ void sendNextSTep(int connfd, char* ip, int port, struct gamestate* gs){
                 printf("letter from user : %d\n", letterNum);
                 bzero(&intRec,1);
 
-                 semop(idSem, opP+4, 1);
+                 printf("val semaphore avant : %d \n", semctl(idSem, 6, GETVAL));
                 int error = semctl(idSem, letterNum-1, GETVAL);
-                 semop(idSem, opV+4, 1);
+
+                 printf("val semaphore apres : %d \n", semctl(idSem, 6, GETVAL));
 
                 if ( error == 0 ) {
                         printf(MAG "you can't edit this letter for the moment \n");
@@ -230,14 +231,16 @@ void sendNextSTep(int connfd, char* ip, int port, struct gamestate* gs){
                 }
                 else {
                      sendStruct(connfd, gs);
+                        semop(idSem, opP+4, 1);
                         if(gs->errormsg[letterNum-1] == 0) {
                                 if ( semop(idSem, opP+(letterNum-1), 1) < 0 ) { perror("op P : "); exit(1);}
+                                semop(idSem, opV+4, 1);
+
 
                               printf("letter %d lock, semaphore value : %d\n", letterNum-1,semctl(idSem, letterNum-1, GETVAL));
                                 if ( connfd <= 0 ){ semop(idSem, opV+(letterNum-1), 1);}
                                 char playRec;
                                 bzero(&playRec,1);
-                                printf("waiting user letter ..");
                                 recvWithSize(connfd, &playRec, ip, port);
                                 printf("play from user : %c\n", playRec);
                                 char letter = playRec;
@@ -245,11 +248,18 @@ void sendNextSTep(int connfd, char* ip, int port, struct gamestate* gs){
 
                                 executePlay(letterNum,letter, gs);
 
-                                semctl(idSem, 4, SETVAL, semctl(idSem, 5, GETVAL));
-                                printf("we need update for %d clients \n", semctl(idSem, 4, GETVAL));
+                                gs->errormsg[letterNum-1] = 0;
                                 if ( semop(idSem, opV+(letterNum-1), 1) < 0 ) { perror("op P : "); exit(1);}
                                 printf("letter %d unlock, semaphore value : %d\n", letterNum-1,semctl(idSem, letterNum-1, GETVAL));
-                                //sendStruct(connfd, gs);
+
+                                semctl(idSem, 4, SETVAL, semctl(idSem, 5, GETVAL));
+                                printf("we need update for %d clients \n", semctl(idSem, 4, GETVAL));
+
+                        } else {
+                            gs->errormsg[letterNum-1] = letterNum;
+                            sendStruct(connfd, gs);
+                            semop(idSem, opV+4, 1);
+
                         }
                 }
 

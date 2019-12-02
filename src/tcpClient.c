@@ -271,20 +271,19 @@ void recvNextStep(int sockfd, char* buff, struct gamestate *gs, char* ip, int po
                 int number;
 
                 ps->step = 1;
-                scanf("%c", &nLetter);
-                number = (int) nLetter - 48;
+                scanf("%d", &number);
                 while(number > 4 ) {
                     char ch;
                     while(  ch != '\n' && getchar() != '\n' ){ /* flush to end of input line */ }
 
                     printf("veuillez  saisir un nombrre entre 1 et 4  \n");
-                    scanf("%c", &nLetter);
-                    number = (int) nLetter - 48;
+                    scanf("%d", &number);
 
                     while(  ch != '\n' && getchar() != '\n' ){ /* flush to end of input line */ }
 
                 }
 
+                nLetter = (char) number + 48;
                 sendWithSize(sockfd, &nLetter, 1);
                  ps->step = 2;
                 bzero(intToSend, 4);
@@ -305,8 +304,10 @@ void recvNextStep(int sockfd, char* buff, struct gamestate *gs, char* ip, int po
 
 
                 if ( gs->errormsg[number-1] == 0) {
+                     char ch;
+                         while( ch != '\n' && getchar() != '\n' ){ /* flush to end of input line */ }
                         scanf("%c", &letter);
-                            char ch;
+                           
                             while( ch != '\n' && getchar() != '\n' ){ /* flush to end of input line */ }
                             
                             printf("veuillez  saisir une lettre \n");

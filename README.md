@@ -24,6 +24,8 @@ make fclean
 
 # Règles du jeu : 
 
+*ATTENTION* Il faut jouer avec des lettres majuscules
+
 - Première étape : choisir le numéro de la lettre à deviner
 - Seconde étape : choisir la lettre à deviner
 - Tentative maximum d'échec = 8 (PERDU si 8 erreurs commises)
