@@ -5,9 +5,10 @@ CXX	=	gcc
 
 LDFLAGS	=	-Wall -g -lpthread
 
-SRC_CLIENT	=		../src/tcpClient.c
+SRC_CLIENT	=	 ../src/tcpClient.c
 
-SRC_SERVER = ../src/tcpServer.c
+SRC_SERVER = ../src/functions.c \
+						 ../src/tcpServer.c
 
 CXXFLAGS= -ansi -pedantic -I./inc
 
